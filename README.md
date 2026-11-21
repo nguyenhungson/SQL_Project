@@ -4,13 +4,13 @@
 **Người thực hiện:** Nguyễn Hùng Sơn  
 **Nội dung phụ trách:** Triển khai và kiểm thử nhân bản dữ liệu MySQL theo mô hình **1 Master (Source) — 2 Replicas**  
 **Môi trường:** Windows PowerShell, Docker Desktop, MySQL 8.4, Python  
-**Nguồn kết quả:** Ảnh chụp `evidences/1.png`–`evidences/21.png` và các file trạng thái/log/kết quả cùng thư mục.
+**Nguồn kết quả:** 37 ảnh `evidences/1.png`–`evidences/37.png`, các file trạng thái/log và hai phiên dữ liệu đo độ trễ trong `evidences/`. Các mục 2–10 ghi lại giai đoạn khởi tạo ban đầu; các mục 11–16 ghi lại lần nâng cấp và kiểm thử cuối.
 
 ## 1. Mục tiêu và phạm vi thực nghiệm
 
 Thực hành thiết lập ba máy chủ MySQL dưới dạng Docker container; cấu hình binary log, tài khoản replication và kết nối hai Replica; kiểm tra đồng bộ cấu trúc và dữ liệu; thử nghiệm INSERT/UPDATE/DELETE; dừng rồi khởi động lại Replica 1 để đánh giá khả năng nhận bù dữ liệu; sinh 10.000 sinh viên giả lập; đối chiếu dữ liệu sau đồng bộ; và đo độ trễ quan sát được khi ghi lên Master.
 
-Đây là **báo cáo các thao tác và kết quả thực nghiệm đã ghi nhận**, không phải tài liệu hướng dẫn cài đặt Cluster. Phần Cluster do thành viên khác trong nhóm thực hiện.
+Thực nghiệm gồm **hai giai đoạn**: (1) thiết lập replication với bảng `SinhVien` ban đầu; (2) nâng cấp lên **7 bảng, 6 khóa ngoại** rồi kiểm thử lại trên cùng hệ thống. Đây là **báo cáo các thao tác và kết quả thực nghiệm đã ghi nhận**, không phải tài liệu hướng dẫn cài đặt Cluster. Phần Cluster do thành viên khác trong nhóm thực hiện.
 
 ### 1.1. Mô hình triển khai
 
@@ -34,7 +34,7 @@ Thực hành thiết lập ba máy chủ MySQL dưới dạng Docker container; 
 | Replica 1 | `mysql-replica1` | `3308` | `3306` | `2` |
 | Replica 2 | `mysql-replica2` | `3309` | `3306` | `3` |
 
-Cấu hình được lưu trong [`docker-compose.yml`](docker-compose.yml); dữ liệu từng node lưu ở Docker named volumes. Mã thử nghiệm nằm trong [`scripts/`](scripts/), lược đồ CSDL trong [`sql/schema.sql`](sql/schema.sql).
+Cấu hình được lưu trong [`docker-compose.yml`](docker-compose.yml); dữ liệu từng node lưu ở Docker named volumes. Mã thử nghiệm nằm trong [`scripts/`](scripts/). [`sql/schema.sql`](sql/schema.sql) tạo bảng `SinhVien` **giai đoạn đầu**, còn [`sql/upgrade_qlsv.sql`](sql/upgrade_qlsv.sql) nâng cấp CSDL hiện hữu lên **7 bảng**; không thay thế hoặc xóa dữ liệu cũ.
 
 ## 2. Triển khai Docker và kiểm tra cấu hình
 
@@ -180,7 +180,7 @@ Không có lỗi ghi nhận trong `Last_IO_Error` và `Last_SQL_Error`. Kết qu
 
 ![Trạng thái kết nối Replica 2](evidences/7.png)
 
-## 4. Khởi tạo CSDL quản lý sinh viên và kiểm tra đồng bộ DDL
+## 4. Khởi tạo CSDL giai đoạn đầu và kiểm tra đồng bộ DDL
 
 **Các câu lệnh đã thực hiện trên Master:**
 
@@ -220,7 +220,7 @@ docker exec mysql-replica2 mysql -uroot -proot123 -e "SHOW TABLES FROM qlsv;"
 
 ![Kiểm tra CSDL và bảng trên hai Replica](evidences/10.png)
 
-## 5. Thử nghiệm đồng bộ CRUD
+## 5. Thử nghiệm đồng bộ CRUD giai đoạn đầu
 
 Các thao tác ghi chỉ được thực hiện trên **Master**; kết quả được đối chiếu bằng `SELECT` trên Master và hai Replica.
 
@@ -284,7 +284,7 @@ docker exec mysql-replica2 mysql -uroot -proot123 -e "SELECT * FROM qlsv.SinhVie
 
 **Đánh giá CRUD:** Các thao tác thêm, sửa và xóa trên Master đều được hai Replica tiếp nhận và áp dụng thành công trong các trường hợp đã thử.
 
-## 6. Thử nghiệm dừng Replica 1 và đồng bộ bù (catch-up)
+## 6. Thử nghiệm dừng Replica 1 và đồng bộ bù giai đoạn đầu (catch-up)
 
 ### 6.1. Dừng replication trên Replica 1
 
@@ -356,7 +356,7 @@ Bản ghi `SV101` đã xuất hiện trên Replica 1 sau khi replication đượ
 
 ![Replica 1 đồng bộ bù thành công](evidences/16.png)
 
-## 7. Sinh 10.000 bản ghi và kiểm tra dữ liệu tải lớn
+## 7. Sinh 10.000 bản ghi và kiểm tra dữ liệu giai đoạn đầu
 
 ### 7.1. Thực thi chương trình sinh dữ liệu
 
@@ -445,7 +445,7 @@ Last_SQL_Error:
 
 ![Trạng thái replication sau đồng bộ dữ liệu lớn](evidences/20.png)
 
-## 8. Đo độ trễ đồng bộ (replication latency)
+## 8. Đo độ trễ đồng bộ giai đoạn đầu (replication latency)
 
 **Script:** [`scripts/measure_latency.py`](scripts/measure_latency.py).
 
@@ -487,7 +487,7 @@ Hai bảng số liệu là **hai lần chạy riêng**; không gộp trị số 
 
 **Đánh giá:** Trong hai lần thử được lưu, mỗi Replica nhận thành công đủ 10/10 bản ghi. Metric được báo cáo là **độ trễ quan sát từ phía chương trình Python trong môi trường Docker local**; phép đo còn bao gồm chi phí query và polling, nên không phải độ trễ nội bộ thuần của MySQL. Do polling Replica 1 trước Replica 2, số liệu này chưa đủ để kết luận Replica 2 có hiệu năng replication thấp hơn.
 
-## 9. Tổng hợp kết quả thực nghiệm
+## 9. Tổng hợp kết quả thực nghiệm giai đoạn đầu
 
 | Hạng mục | Lệnh / phương pháp kiểm tra | Kết quả ghi nhận | Minh chứng |
 |---|---|---|---|
@@ -516,8 +516,92 @@ Hai bảng số liệu là **hai lần chạy riêng**; không gộp trị số 
 - [`evidences/latency_result.txt`](evidences/latency_result.txt): số liệu đo latency của phiên chạy lưu ra file.
 - [`evidences/master.log`](evidences/master.log), [`evidences/replica1.log`](evidences/replica1.log), [`evidences/replica2.log`](evidences/replica2.log): nhật ký Docker/MySQL của ba node.
 
-## 10. Kết luận
+## 10. Kết luận giai đoạn đầu
 
 Trong phạm vi bài thực hành, đã triển khai thành công **1 MySQL Master và 2 Replicas** bằng Docker; cấu trúc bảng và các thay đổi INSERT/UPDATE/DELETE trên Master được đồng bộ sang hai Replica. Khi dừng replication trên Replica 1, Master vẫn tiếp tục ghi và Replica 2 vẫn tiếp nhận thay đổi; sau khi chạy lại, Replica 1 nhận bù bản ghi bị thiếu. Thử nghiệm tải lớn tạo **10.000 bản ghi**, và phép kiểm tra tại thời điểm chụp cho thấy cả ba node cùng có **10.001 bản ghi**. Hai phiên đo latency được lưu đều đạt **10/10 lượt nhận dữ liệu thành công** trên mỗi Replica.
 
 Những kết quả này đáp ứng phần **thiết lập, kiểm thử đồng bộ, mô phỏng mất kết nối, sinh dữ liệu và đo độ trễ** của bài thực hành Master–Slave Replication được phân công. Kết quả không nhằm chứng minh tính sẵn sàng cao tự động (automatic failover) hoặc hiệu năng Cluster; đó là nội dung thử nghiệm khác với replication một Master–hai Replica.
+
+---
+
+## 11. Nâng cấp CSDL quản lý sinh viên lên 7 bảng
+
+**Lược đồ thực tế được triển khai theo hai bước:**
+
+1. [`sql/schema.sql`](sql/schema.sql) tạo CSDL `qlsv` và bảng `SinhVien` ban đầu (`MaSV`, `HoTen`, `NgaySinh`).
+2. [`sql/upgrade_qlsv.sql`](sql/upgrade_qlsv.sql) bổ sung `Khoa`, `Nganh`, `Lop`, `MonHoc`, `HocKy`, `Diem` và cột `SinhVien.MaLop`. Cột `MaLop` cho phép `NULL` để giữ nguyên những sinh viên đã có trước khi nâng cấp.
+
+**Bảy bảng:** `SinhVien`, `Lop`, `Nganh`, `Khoa`, `MonHoc`, `HocKy`, `Diem`.
+
+**Sáu khóa ngoại:** `SinhVien.MaLop → Lop`; `Lop.MaNganh → Nganh`; `Nganh.MaKhoa → Khoa`; `Diem.MaSV → SinhVien`; `Diem.MaMH → MonHoc`; `Diem.MaHK → HocKy`.
+
+- [`22.png`](evidences/22.png): Master hiển thị 7 bảng và các quan hệ khóa ngoại.
+- [`25.png`](evidences/25.png): Replica 1 và Replica 2 đều có 7 bảng, 6 khóa ngoại.
+- [`26.png`](evidences/26.png): truy vấn JOIN 7 bảng trên Master trả về sinh viên mẫu `LAB26001`, điểm ban đầu `8.50`.
+- [`27.png`](evidences/27.png): hai Replica trả về cùng thông tin truy vấn JOIN.
+
+Ảnh [`24.png`](evidences/24.png) ghi nhận 10.057 sinh viên ở ba nút **trước các lượt nạp dữ liệu mới**; không dùng con số này làm tổng số sinh viên cuối cùng.
+
+## 12. Kiểm thử đồng bộ CRUD và khôi phục Replica sau nâng cấp
+
+| Phép thử | Kết quả quan sát | Minh chứng |
+|---|---|---|
+| Thêm dữ liệu mẫu và JOIN | Bản ghi `LAB26001` và các thông tin liên kết xuất hiện trên Master và hai Replica | [`26.png`](evidences/26.png), [`27.png`](evidences/27.png) |
+| UPDATE | Điểm của `LAB26001` đổi thành `9.00` và có trên hai Replica | [`28.png`](evidences/28.png) |
+| DELETE | Chỉ xóa **bản ghi `Diem`** thử nghiệm; kết quả đếm bằng `0` ở cả ba nút | [`29.png`](evidences/29.png) |
+| STOP REPLICA | Hai luồng IO/SQL của Replica 1 chuyển sang `No/No` | [`30.png`](evidences/30.png) |
+| Ghi khi Replica 1 tạm dừng | `LAB26002` có trên Master và Replica 2, chưa có trên Replica 1 | [`31.png`](evidences/31.png) |
+| START REPLICA và đồng bộ bù | Hai luồng IO/SQL trở lại `Yes/Yes`, Replica 1 nhận được `LAB26002` | [`32.png`](evidences/32.png) |
+
+Thử nghiệm chỉ dừng **luồng replication** trên Replica 1, không dừng container, không chuyển vai trò Master và không kiểm tra failover tự động.
+
+## 13. Kiểm thử đồng bộ dữ liệu 1.000 và 10.000 bản ghi mới
+
+Dữ liệu mới được chèn trên Master với mã riêng, không trùng với tập dữ liệu ban đầu:
+
+| Đợt thử | Tiền tố mã sinh viên | Số bản ghi đối chiếu trên từng nút | Minh chứng |
+|---|---|---:|---|
+| 1.000 bản ghi | `LAB1K_` | Master: 1.000; Replica 1: 1.000; Replica 2: 1.000 | [`33.png`](evidences/33.png) |
+| 10.000 bản ghi | `LAB10K_` | Master: 10.000; Replica 1: 10.000; Replica 2: 10.000 | [`34.png`](evidences/34.png) |
+
+Các số trên là kết quả đếm **theo tiền tố của từng đợt chèn**, không phải `COUNT(*)` tổng toàn bộ bảng `SinhVien`. Không suy ra thời gian xử lý 10.000 bản ghi từ ảnh đếm.
+
+## 14. Đo độ trễ quan sát được sau nâng cấp
+
+Script [`scripts/measure_latency.py`](scripts/measure_latency.py) thực hiện 10 lượt: ghi một sinh viên mã `LAT_...` lên Master, sau đó polling hai Replica cho tới khi nhìn thấy bản ghi.
+
+| Chỉ số | Replica 1 – phiên 1 | Replica 2 – phiên 1 | Replica 1 – phiên 2 | Replica 2 – phiên 2 |
+|---|---:|---:|---:|---:|
+| Số mẫu thành công | 10/10 | 10/10 | 10/10 | 10/10 |
+| Trung bình (ms) | 19.632 | 21.871 | **18.263** | **20.460** |
+| Trung vị (ms) | 18.893 | 21.050 | 18.006 | 20.199 |
+| Nhỏ nhất (ms) | 17.275 | 19.448 | 17.186 | 19.165 |
+| Lớn nhất (ms) | 28.647 | 31.132 | 21.099 | 23.320 |
+
+- Phiên 1: [`35.png`](evidences/35.png).
+- **Phiên 2 dùng trong báo cáo chính:** [`36.png`](evidences/36.png), số liệu gốc ở [`evidences/latency_after_upgrade.txt`](evidences/latency_after_upgrade.txt).
+- Kiểm tra cuối: [`37.png`](evidences/37.png) — cả hai Replica có IO/SQL `Yes/Yes`, `Seconds_Behind_Source = 0`, không ghi nhận lỗi IO/SQL tại thời điểm kiểm tra.
+
+Đây là **độ trễ quan sát từ client trong môi trường Docker local**, bao gồm chi phí truy vấn và polling, không phải độ trễ nội bộ thuần của MySQL. Script kiểm tra Replica 1 trước Replica 2 nên không dùng chênh lệch này để khẳng định Replica 2 chậm hơn về hiệu năng replication.
+
+## 15. Bộ ảnh chọn lọc cho báo cáo Phần A
+
+Trong **37 ảnh gốc** (đều giữ tại `evidences/`), đề xuất dùng **14 ảnh** ở phần nội dung chính, sắp theo chủ đề thay vì tên file:
+
+| Mục trong báo cáo | Ảnh dùng | Nội dung chứng minh |
+|---|---|---|
+| Triển khai và cấu hình | [`1.png`](evidences/1.png), [`2.png`](evidences/2.png) | 3 container, cổng, server-id, binary log |
+| Thiết kế và đồng bộ cấu trúc | [`22.png`](evidences/22.png), [`25.png`](evidences/25.png) | 7 bảng, 6 khóa ngoại trên Master và hai Replica |
+| Kiểm thử dữ liệu liên kết | [`26.png`](evidences/26.png), [`27.png`](evidences/27.png) | JOIN trên Master và hai Replica |
+| Đồng bộ UPDATE/DELETE | [`28.png`](evidences/28.png), [`29.png`](evidences/29.png) | Điểm `9.00` và xóa bản ghi điểm |
+| Dừng và phục hồi Replica 1 | [`30.png`](evidences/30.png), [`31.png`](evidences/31.png), [`32.png`](evidences/32.png) | Dừng, chênh lệch tạm thời, nhận bù dữ liệu |
+| Kiểm thử số lượng | [`34.png`](evidences/34.png) | 10.000 bản ghi mới có trên cả ba nút |
+| Hiệu năng và trạng thái cuối | [`36.png`](evidences/36.png), [`37.png`](evidences/37.png) | 10 lần đo latency và trạng thái replication không lỗi |
+
+Các ảnh còn lại, gồm [`33.png`](evidences/33.png) về 1.000 bản ghi, được giữ làm **minh chứng bổ sung**; ảnh `1.png`–`21.png` là hồ sơ **giai đoạn ban đầu**, không được dùng để mô tả nhầm rằng trạng thái cuối chỉ có một bảng.
+
+## 16. Kết luận sau nâng cấp
+
+Trên mô hình **1 Master – 2 Replicas**, CSDL `qlsv` được mở rộng từ bảng `SinhVien` ban đầu lên **7 bảng với 6 khóa ngoại**. Kiểm tra thực tế ghi nhận đồng bộ cấu trúc, dữ liệu liên kết, UPDATE và DELETE, đồng bộ bù sau khi khôi phục Replica 1, cùng hai đợt đối chiếu 1.000 và 10.000 bản ghi mới trên ba nút. Hai phiên đo latency sau nâng cấp đều đạt **10/10 lượt thành công** ở mỗi Replica; phiên được lưu vào `latency_after_upgrade.txt` có trung bình **18.263 ms (Replica 1)** và **20.460 ms (Replica 2)**. Kết quả cuối cùng cho thấy cả hai luồng replication đang chạy, không có lỗi báo cáo tại thời điểm kiểm tra.
+
+Phạm vi này **không** chứng minh failover tự động, tính nhất quán đồng bộ tức thời hoặc hiệu năng của MySQL Cluster.
